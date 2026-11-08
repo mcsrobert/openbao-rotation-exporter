@@ -1,0 +1,35 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    'docker:enableMajor',
+    'docker:pinDigests',
+    'helpers:pinGitHubActionDigests',
+    'github>mcsrobert/homelab//.github/renovate/commit-message.json5',
+    'github>mcsrobert/homelab//.github/renovate/merge-schedule.json5',
+    ':dependencyDashboard',
+    ':disableRateLimiting',
+    ':enablePreCommit',
+  ],
+  timezone: 'Europe/Amsterdam',
+  dependencyDashboardTitle: 'Renovate Dashboard 🤖',
+  minimumReleaseAge: '6 days',
+  internalChecksFilter: 'strict',
+  postUpdateOptions: ['gomodTidy'],
+  customManagers: [
+    {
+      description: 'Update annotated dependencies',
+      customType: 'regex',
+      managerFilePatterns: ['/\\.ya?ml$/'],
+      matchStrings: ['datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n.*[:=]\\s*["\']?(?<currentValue>[^"\'\\s]+)["\']?'],
+      versioningTemplate: 'semver-coerced',
+    },
+  ],
+  packageRules: [
+    {
+      description: 'Update the Go toolchain together everywhere it is pinned',
+      matchDepNames: ['go', 'golang', 'docker.io/library/golang'],
+      groupName: 'go',
+    },
+  ],
+}

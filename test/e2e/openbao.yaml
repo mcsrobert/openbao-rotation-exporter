@@ -1,0 +1,76 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openbao
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao
+  namespace: openbao
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openbao-token-review
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: openbao
+    namespace: openbao
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openbao
+  namespace: openbao
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openbao
+  template:
+    metadata:
+      labels:
+        app: openbao
+    spec:
+      serviceAccountName: openbao
+      containers:
+        - name: openbao
+          image: ghcr.io/openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+          command:
+            - bao
+            - server
+            - -dev
+            - -dev-root-token-id=root
+            - -dev-listen-address=0.0.0.0:8200
+            - -dev-no-store-token
+          env:
+            - name: BAO_ADDR
+              value: http://127.0.0.1:8200
+            - name: BAO_TOKEN
+              value: root
+          ports:
+            - name: http
+              containerPort: 8200
+          readinessProbe:
+            httpGet:
+              path: /v1/sys/health
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openbao
+  namespace: openbao
+spec:
+  selector:
+    app: openbao
+  ports:
+    - name: http
+      port: 8200
+      targetPort: http

@@ -1,0 +1,99 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: CI
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_call:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.11.4
+      - name: Lint
+        run: mise run lint
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.11.4
+      - name: Unit tests
+        run: mise run test
+      - name: Integration tests
+        run: mise run test:integration
+      - name: Alert rule tests
+        run: mise run test:rules
+      - name: Image test
+        run: mise run test:image
+
+  e2e:
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.11.4
+      - name: End-to-end test
+        run: mise run test:e2e
+
+  ci:
+    if: ${{ always() }}
+    needs: ["lint", "test", "e2e"]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in ${RESULTS}; do
+            if [[ "${result}" != "success" && "${result}" != "skipped" ]]; then
+              echo "Failed: ${RESULTS}"
+              exit 1
+            fi
+          done

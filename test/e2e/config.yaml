@@ -1,0 +1,13 @@
+---
+openbao:
+  address: http://openbao.openbao.svc:8200
+  mount: e2e
+  auth:
+    kubernetes:
+      role: openbao-rotation-exporter
+collection:
+  interval: 10s
+  timeout: 10s
+keys:
+  app/database: 90d
+  app/missing: 90d

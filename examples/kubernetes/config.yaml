@@ -1,0 +1,10 @@
+---
+openbao:
+  address: https://openbao.example.com
+  mount: secret
+  auth:
+    kubernetes:
+      role: openbao-rotation-exporter
+keys:
+  app/database: 90d
+  app/api-token: 26w

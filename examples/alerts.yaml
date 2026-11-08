@@ -1,0 +1,32 @@
+---
+groups:
+  - name: openbao-rotation
+    rules:
+      - alert: OpenBaoRotationDue
+        expr: time() > openbao_rotation_key_due_timestamp_seconds
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: OpenBao key {{ $labels.key }} is due for rotation
+      - alert: OpenBaoRotationKeyFailing
+        expr: openbao_rotation_key_up == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Cannot read rotation metadata for OpenBao key {{ $labels.key }}
+      - alert: OpenBaoRotationCollectionStale
+        expr: time() - openbao_rotation_last_success_timestamp_seconds > 1800
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: OpenBao rotation metadata has not been collected for 30 minutes
+      - alert: OpenBaoRotationExporterDown
+        expr: absent(up{job="openbao-rotation-exporter"}) or up{job="openbao-rotation-exporter"} == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The OpenBao rotation exporter cannot be scraped

@@ -1,0 +1,58 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openbao-rotation-exporter
+  labels:
+    app.kubernetes.io/name: openbao-rotation-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openbao-rotation-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openbao-rotation-exporter
+    spec:
+      serviceAccountName: openbao-rotation-exporter
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: exporter
+          image: ghcr.io/mcsrobert/openbao-rotation-exporter:0.1.0
+          ports:
+            - name: metrics
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/openbao-rotation-exporter
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: openbao-rotation-exporter-config
