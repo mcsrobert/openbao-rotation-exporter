@@ -1,0 +1,15 @@
+---
+apiVersion: v2
+name: openbao-rotation-exporter
+description: Prometheus exporter for OpenBao KV v2 rotation deadlines
+type: application
+version: 0.0.0-dev
+appVersion: dev
+home: https://github.com/mcsrobert/openbao-rotation-exporter
+sources:
+  - https://github.com/mcsrobert/openbao-rotation-exporter
+keywords:
+  - openbao
+  - prometheus
+  - secrets
+  - rotation

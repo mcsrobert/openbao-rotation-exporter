@@ -1,0 +1,67 @@
+{{- if .Values.prometheusRule.enabled }}
+{{- $fullname := include "openbao-rotation-exporter.fullname" . }}
+{{- $selector := printf "job=%q,namespace=%q" $fullname .Release.Namespace }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "openbao-rotation-exporter.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: {{ $fullname }}
+      rules:
+        - alert: OpenBaoRotationDue
+          expr: time() > openbao_rotation_key_due_timestamp_seconds{ {{- $selector -}} }
+          for: 15m
+          {{- with .Values.prometheusRule.alertLabels }}
+          labels:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          annotations:
+            summary: OpenBao key {{ "{{" }} $labels.key {{ "}}" }} is due for rotation
+            description: >-
+              The current version passed its rotation interval on
+              {{ "{{" }} $value | humanizeTimestamp {{ "}}" }}. Rotate the credential and write the
+              new value to OpenBao.
+        - alert: OpenBaoRotationKeyFailing
+          expr: openbao_rotation_key_up{ {{- $selector -}} } == 0
+          for: 15m
+          {{- with .Values.prometheusRule.alertLabels }}
+          labels:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          annotations:
+            summary: Cannot read rotation metadata for OpenBao key {{ "{{" }} $labels.key {{ "}}" }}
+            description: >-
+              Check that the key exists and that the exporter's policy can read its metadata.
+              openbao_rotation_key_failures_total has the reason.
+        - alert: OpenBaoRotationCollectionStale
+          expr: time() - openbao_rotation_last_success_timestamp_seconds{ {{- $selector -}} } > 1800
+          for: 5m
+          {{- with .Values.prometheusRule.alertLabels }}
+          labels:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          annotations:
+            summary: OpenBao rotation metadata has not been collected for 30 minutes
+            description: >-
+              Due times may be out of date. Check OpenBao, the exporter's login and the exporter
+              logs.
+        - alert: OpenBaoRotationExporterDown
+          expr: absent(up{ {{- $selector -}} }) or up{ {{- $selector -}} } == 0
+          for: 15m
+          {{- with .Values.prometheusRule.alertLabels }}
+          labels:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          annotations:
+            summary: The OpenBao rotation exporter cannot be scraped
+            description: >-
+              Rotation alerts will not resolve or fire for new keys until the exporter is back.
+              Check the pod and the ServiceMonitor.
+{{- end }}

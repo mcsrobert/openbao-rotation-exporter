@@ -10,6 +10,8 @@ permissions: {}
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
+  CHART_REGISTRY: ghcr.io/${{ github.repository_owner }}/charts
+  CHART_NAME: openbao-rotation-exporter
 
 jobs:
   ci:
@@ -26,6 +28,7 @@ jobs:
       id-token: write
       packages: write
     outputs:
+      chart-digest: ${{ steps.push-chart.outputs.digest }}
       digest: ${{ steps.build.outputs.digest }}
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -46,12 +49,27 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - name: Install tools
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.11.4
+          install_args: helm yq
+          cache: false
+      - name: Log in to GHCR with Helm
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin <<< "${GH_TOKEN}"
       - name: Refuse to overwrite a published version
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           if docker buildx imagetools inspect "${IMAGE}:${VERSION}" > /dev/null 2>&1; then
             echo "${IMAGE}:${VERSION} already exists"
+            exit 1
+          fi
+          if helm show chart "oci://${CHART_REGISTRY}/${CHART_NAME}" --version "${VERSION}" > /dev/null 2>&1; then
+            echo "${CHART_REGISTRY}/${CHART_NAME}:${VERSION} already exists"
             exit 1
           fi
       - name: Build and push
@@ -76,6 +94,32 @@ jobs:
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Package the chart
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          yq --inplace '.image.digest = strenv(DIGEST)' "charts/${CHART_NAME}/values.yaml"
+          helm package "charts/${CHART_NAME}" --version "${VERSION}" --app-version "${VERSION}" --destination "${RUNNER_TEMP}/chart"
+      - name: Push the chart
+        id: push-chart
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          output=$(helm push "${RUNNER_TEMP}/chart/${CHART_NAME}-${VERSION}.tgz" "oci://${CHART_REGISTRY}" 2>&1)
+          echo "${output}"
+          digest=$(sed -n 's/^Digest: //p' <<< "${output}")
+          if [[ "${digest}" != sha256:* ]]; then
+            echo "Could not read the chart digest"
+            exit 1
+          fi
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+      - name: Attest the chart's build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.CHART_REGISTRY }}/${{ env.CHART_NAME }}
+          subject-digest: ${{ steps.push-chart.outputs.digest }}
           push-to-registry: true
 
   verify:
@@ -110,22 +154,68 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: gh attestation verify "oci://${IMAGE}@${DIGEST}" --repo "${REPOSITORY}"
 
+  verify-chart:
+    needs: ["publish"]
+    runs-on: ubuntu-24.04
+    permissions:
+      attestations: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.11.4
+          install_args: helm yq
+          cache: false
+      - name: Pull anonymously and check the image pin
+        env:
+          CHART_DIGEST: ${{ needs.publish.outputs.chart-digest }}
+          DIGEST: ${{ needs.publish.outputs.digest }}
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          directory=$(mktemp -d)
+          output=$(helm pull "oci://${CHART_REGISTRY}/${CHART_NAME}" --version "${VERSION}" --destination "${directory}" 2>&1)
+          echo "${output}"
+          if [[ "$(sed -n 's/^Digest: //p' <<< "${output}")" != "${CHART_DIGEST}" ]]; then
+            echo "Expected chart digest ${CHART_DIGEST}"
+            exit 1
+          fi
+          actual=$(helm show values "${directory}/${CHART_NAME}-${VERSION}.tgz" | yq '.image.digest')
+          if [[ "${actual}" != "${DIGEST}" ]]; then
+            echo "Expected image digest ${DIGEST}, got ${actual}"
+            exit 1
+          fi
+      - name: Verify the attestation
+        env:
+          CHART_DIGEST: ${{ needs.publish.outputs.chart-digest }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh attestation verify "oci://${CHART_REGISTRY}/${CHART_NAME}@${CHART_DIGEST}" --repo "${REPOSITORY}"
+
   release:
-    needs: ["publish", "verify"]
+    needs: ["publish", "verify", "verify-chart"]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - name: Create the GitHub release
+      - name: Add the published artifacts to the GitHub release
         env:
+          CHART_DIGEST: ${{ needs.publish.outputs.chart-digest }}
           DIGEST: ${{ needs.publish.outputs.digest }}
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
           VERSION: ${{ needs.publish.outputs.version }}
         run: |
-          gh release create "${TAG}" \
-            --repo "${REPOSITORY}" \
-            --verify-tag \
-            --generate-notes \
-            --notes "Image: \`${IMAGE}:${VERSION}@${DIGEST}\`"
+          changelog=$(gh release view "${TAG}" --repo "${REPOSITORY}" --json body --jq .body)
+          notes="Image: \`${IMAGE}:${VERSION}@${DIGEST}\`
+
+          Chart: \`oci://${CHART_REGISTRY}/${CHART_NAME}:${VERSION}@${CHART_DIGEST}\`
+
+          ${changelog}"
+          gh release edit "${TAG}" --repo "${REPOSITORY}" --notes "${notes}"

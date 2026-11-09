@@ -59,13 +59,12 @@ jobs:
         run: mise run test
       - name: Integration tests
         run: mise run test:integration
-      - name: Alert rule tests
-        run: mise run test:rules
+      - name: Chart tests
+        run: mise run test:chart
       - name: Image test
         run: mise run test:image
 
   e2e:
-    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read

@@ -136,7 +136,7 @@ func (c *Client) CurrentVersionCreated(ctx context.Context, token, key string) (
 	if version.DeletionTime != "" {
 		deletion, err := time.Parse(time.RFC3339Nano, version.DeletionTime)
 		if err != nil {
-			return time.Time{}, &Error{ReasonInvalidResponse, fmt.Errorf("parse deletion time: %w", err)}
+			return time.Time{}, &Error{ReasonInvalidResponse, errors.New("invalid deletion time")}
 		}
 		if !deletion.After(c.now()) {
 			return time.Time{}, &Error{ReasonVersionUnavailable, errors.New("current version is deleted")}
@@ -144,7 +144,7 @@ func (c *Client) CurrentVersionCreated(ctx context.Context, token, key string) (
 	}
 	created, err := time.Parse(time.RFC3339Nano, version.CreatedTime)
 	if err != nil {
-		return time.Time{}, &Error{ReasonInvalidResponse, fmt.Errorf("parse creation time: %w", err)}
+		return time.Time{}, &Error{ReasonInvalidResponse, errors.New("invalid creation time")}
 	}
 	return created, nil
 }

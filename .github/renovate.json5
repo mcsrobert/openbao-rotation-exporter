@@ -20,7 +20,7 @@
     {
       description: 'Update annotated dependencies',
       customType: 'regex',
-      managerFilePatterns: ['/\\.ya?ml$/'],
+      managerFilePatterns: ['/\\.ya?ml$/', '/\\.sh$/'],
       matchStrings: ['datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n.*[:=]\\s*["\']?(?<currentValue>[^"\'\\s]+)["\']?'],
       versioningTemplate: 'semver-coerced',
     },
@@ -30,6 +30,18 @@
       description: 'Update the Go toolchain together everywhere it is pinned',
       matchDepNames: ['go', 'golang', 'docker.io/library/golang'],
       groupName: 'go',
+    },
+    {
+      description: 'Release new base images, which the preset would mark as chore',
+      matchManagers: ['dockerfile'],
+      matchUpdateTypes: ['digest'],
+      semanticCommitType: 'fix',
+    },
+    {
+      description: 'Do not release for tools that are not in the image',
+      matchManagers: ['mise', 'pre-commit', 'custom.regex'],
+      matchDepNames: ['!go'],
+      semanticCommitType: 'chore',
     },
   ],
 }

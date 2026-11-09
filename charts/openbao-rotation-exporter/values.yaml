@@ -1,0 +1,73 @@
+---
+nameOverride: ""
+fullnameOverride: ""
+
+config:
+  openbao:
+    address: ""
+    mount: ""
+    auth: {}
+  keys: {}
+
+image:
+  repository: ghcr.io/mcsrobert/openbao-rotation-exporter
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automount: true
+
+service:
+  port: 8080
+  annotations: {}
+
+serviceMonitor:
+  enabled: true
+  labels: {}
+  interval: ""
+  scrapeTimeout: ""
+
+prometheusRule:
+  enabled: true
+  labels: {}
+  alertLabels:
+    severity: warning
+
+networkPolicy:
+  enabled: false
+  from: []
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 64Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+podAnnotations: {}
+podLabels: {}
+priorityClassName: ""
+nodeSelector: {}
+tolerations: []
+affinity: {}
+extraVolumes: []
+extraVolumeMounts: []

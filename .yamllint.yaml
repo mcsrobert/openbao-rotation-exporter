@@ -1,5 +1,7 @@
 ---
 extends: default
+ignore: |
+  charts/*/templates/
 rules:
   indentation: enable
   line-length: disable

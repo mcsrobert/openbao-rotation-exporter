@@ -191,7 +191,10 @@ func (c *Config) validate() error {
 	if len(c.Keys) == 0 {
 		add("keys: at least one key is required")
 	}
-	for key := range c.Keys {
+	for key, interval := range c.Keys {
+		if interval <= 0 {
+			add("keys[%q]: interval must be positive", key)
+		}
 		if err := validatePath(key); err != nil {
 			add("keys[%q]: %w", key, err)
 		}
