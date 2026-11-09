@@ -203,7 +203,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Create the GitHub release
+      - name: Add the published artifacts to the GitHub release
         env:
           CHART_DIGEST: ${{ needs.publish.outputs.chart-digest }}
           DIGEST: ${{ needs.publish.outputs.digest }}
@@ -212,11 +212,10 @@ jobs:
           TAG: ${{ github.ref_name }}
           VERSION: ${{ needs.publish.outputs.version }}
         run: |
+          changelog=$(gh release view "${TAG}" --repo "${REPOSITORY}" --json body --jq .body)
           notes="Image: \`${IMAGE}:${VERSION}@${DIGEST}\`
 
-          Chart: \`oci://${CHART_REGISTRY}/${CHART_NAME}:${VERSION}@${CHART_DIGEST}\`"
-          gh release create "${TAG}" \
-            --repo "${REPOSITORY}" \
-            --verify-tag \
-            --generate-notes \
-            --notes "${notes}"
+          Chart: \`oci://${CHART_REGISTRY}/${CHART_NAME}:${VERSION}@${CHART_DIGEST}\`
+
+          ${changelog}"
+          gh release edit "${TAG}" --repo "${REPOSITORY}" --notes "${notes}"

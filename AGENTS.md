@@ -54,6 +54,12 @@ mise run test:e2e      # needs Docker
 - Commit messages are conventional commits with a scope, such as
   `fix(collector): keep the last due time`. A hook rejects anything else.
 - Changes reach `main` through a pull request, with the `ci` check passing.
-- Releases are `vX.Y.Z` tags. They publish an immutable image and chart, both
-  versioned `X.Y.Z`. The chart in git has a placeholder version, and the release
-  sets its version and pins the image digest.
+- Commit types decide releases: `feat` and `fix` create one, so use another type
+  for changes that do not affect the image or chart.
+- Releases come from merging the pull request release-please keeps open. Do not
+  push tags by hand: the release workflow expects the GitHub release to exist.
+- The `vX.Y.Z` tag publishes an immutable image and chart, both versioned
+  `X.Y.Z`. The chart in git has a placeholder version, and the release sets its
+  version and pins the image digest.
+- Do not edit `CHANGELOG.md` or `.release-please-manifest.json`. Release-please
+  maintains them.

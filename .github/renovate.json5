@@ -31,5 +31,17 @@
       matchDepNames: ['go', 'golang', 'docker.io/library/golang'],
       groupName: 'go',
     },
+    {
+      description: 'Release new base images, which the preset would mark as chore',
+      matchManagers: ['dockerfile'],
+      matchUpdateTypes: ['digest'],
+      semanticCommitType: 'fix',
+    },
+    {
+      description: 'Do not release for tools that are not in the image',
+      matchManagers: ['mise', 'pre-commit', 'custom.regex'],
+      matchDepNames: ['!go'],
+      semanticCommitType: 'chore',
+    },
   ],
 }
