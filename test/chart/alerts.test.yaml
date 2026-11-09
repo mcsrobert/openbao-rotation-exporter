@@ -42,6 +42,85 @@ tests:
               summary: Cannot read rotation metadata for OpenBao key app/db
               description: Check that the key exists and that the exporter's policy can read its metadata. openbao_rotation_key_failures_total has the reason.
 
+  - name: a pod rollout keeps one overdue alert firing
+    interval: 5m
+    input_series:
+      - series: openbao_rotation_key_due_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation",key="app/db",pod="old",instance="10.0.0.1:8080"}
+        values: 600x6 _x6
+      - series: openbao_rotation_key_due_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation",key="app/db",pod="new",instance="10.0.0.2:8080"}
+        values: _x5 600x7
+    alert_rule_test:
+      - eval_time: 28m
+        alertname: OpenBaoRotationDue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+              key: app/db
+            exp_annotations:
+              summary: OpenBao key app/db is due for rotation
+              description: The current version passed its rotation interval on 1970-01-01 00:10:00 +0000 UTC. Rotate the credential and write the new value to OpenBao.
+      - eval_time: 36m
+        alertname: OpenBaoRotationDue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+              key: app/db
+            exp_annotations:
+              summary: OpenBao key app/db is due for rotation
+              description: The current version passed its rotation interval on 1970-01-01 00:10:00 +0000 UTC. Rotate the credential and write the new value to OpenBao.
+
+  - name: a pod rollout keeps one failing key alert firing
+    interval: 5m
+    input_series:
+      - series: openbao_rotation_key_up{job="openbao-rotation-exporter",namespace="rotation",key="app/db",pod="old",instance="10.0.0.1:8080"}
+        values: 0x6 _x6
+      - series: openbao_rotation_key_up{job="openbao-rotation-exporter",namespace="rotation",key="app/db",pod="new",instance="10.0.0.2:8080"}
+        values: _x5 0x7
+    alert_rule_test:
+      - eval_time: 28m
+        alertname: OpenBaoRotationKeyFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+              key: app/db
+            exp_annotations:
+              summary: Cannot read rotation metadata for OpenBao key app/db
+              description: Check that the key exists and that the exporter's policy can read its metadata. openbao_rotation_key_failures_total has the reason.
+      - eval_time: 36m
+        alertname: OpenBaoRotationKeyFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+              key: app/db
+            exp_annotations:
+              summary: Cannot read rotation metadata for OpenBao key app/db
+              description: Check that the key exists and that the exporter's policy can read its metadata. openbao_rotation_key_failures_total has the reason.
+
+  - name: during a rollout the newest due time wins and one readable pod keeps the key healthy
+    interval: 5m
+    input_series:
+      - series: openbao_rotation_key_due_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation",key="app/db",pod="old",instance="10.0.0.1:8080"}
+        values: 600x12
+      - series: openbao_rotation_key_due_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation",key="app/db",pod="new",instance="10.0.0.2:8080"}
+        values: 86400x12
+      - series: openbao_rotation_key_up{job="openbao-rotation-exporter",namespace="rotation",key="app/db",pod="old",instance="10.0.0.1:8080"}
+        values: 1x12
+      - series: openbao_rotation_key_up{job="openbao-rotation-exporter",namespace="rotation",key="app/db",pod="new",instance="10.0.0.2:8080"}
+        values: 0x12
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: OpenBaoRotationDue
+      - eval_time: 40m
+        alertname: OpenBaoRotationKeyFailing
+
   - name: a key that is not due stays quiet
     interval: 5m
     input_series:

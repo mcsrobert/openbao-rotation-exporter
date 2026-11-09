@@ -83,7 +83,7 @@ expect_equal "service name of another release" \
   "other-openbao-rotation-exporter"
 expect_equal "alert scope of another release" \
   "$(other --show-only templates/prometheus-rule.yaml | yq '.spec.groups[0].rules[1].expr')" \
-  'openbao_rotation_key_up{job="other-openbao-rotation-exporter",namespace="elsewhere"} == 0'
+  'max by (job, namespace, key) (openbao_rotation_key_up{job="other-openbao-rotation-exporter",namespace="elsewhere"}) == 0'
 
 expect_rejected "missing configuration"
 expect_rejected "an unknown value" --values "${values}" --set unknown=true

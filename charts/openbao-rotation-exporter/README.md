@@ -77,7 +77,10 @@ the chart uses `serviceAccount.name`, or `default` when no name is provided.
 | `extraVolumes`, `extraVolumeMounts` | `[]` | For `openbao.caFile` or `auth.tokenFile` |
 | `nameOverride`, `fullnameOverride` | `""` | Resource names |
 
-The chart runs one replica, because the alerts assume one series per key.
+The chart runs one replica. `OpenBaoRotationDue` and `OpenBaoRotationKeyFailing`
+aggregate each key across pods, so a rollout does not resolve them and fire
+them again for the new pod. While two pods overlap, the latest due time counts,
+and a key only fails when no pod can read it.
 
 ## Alerts
 
