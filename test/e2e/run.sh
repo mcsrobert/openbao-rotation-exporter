@@ -64,6 +64,7 @@ done
 for expected in \
   'openbao_rotation_build_info{version="e2e"} 1' \
   'openbao_rotation_collection_success 1' \
+  'openbao_rotation_collection_interval_seconds 10' \
   'openbao_rotation_key_up{key="app/database"} 1' \
   'openbao_rotation_key_due_timestamp_seconds{key="app/database"}' \
   'openbao_rotation_key_up{key="app/missing"} 0' \

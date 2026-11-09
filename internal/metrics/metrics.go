@@ -43,6 +43,11 @@ var (
 		"How long the latest collection took.",
 		nil, nil,
 	)
+	collectionIntervalDesc = prometheus.NewDesc(
+		"openbao_rotation_collection_interval_seconds",
+		"The configured time between collections.",
+		nil, nil,
+	)
 	collectionFailuresDesc = prometheus.NewDesc(
 		"openbao_rotation_collection_failures_total",
 		"Failed collections by reason.",
@@ -79,6 +84,7 @@ func (e *exporter) Describe(descs chan<- *prometheus.Desc) {
 	descs <- collectionSuccessDesc
 	descs <- lastSuccessDesc
 	descs <- collectionDurationDesc
+	descs <- collectionIntervalDesc
 	descs <- collectionFailuresDesc
 	descs <- buildInfoDesc
 }
@@ -109,6 +115,7 @@ func (e *exporter) Collect(out chan<- prometheus.Metric) {
 	}
 	gauge(lastSuccessDesc, lastSuccess)
 	gauge(collectionDurationDesc, snapshot.Duration.Seconds())
+	gauge(collectionIntervalDesc, snapshot.Interval.Seconds())
 	counters(collectionFailuresDesc, snapshot.Failures)
 	gauge(buildInfoDesc, 1, e.version)
 }

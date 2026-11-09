@@ -20,6 +20,9 @@ openbao_rotation_collection_duration_seconds 1.5
 # HELP openbao_rotation_collection_failures_total Failed collections by reason.
 # TYPE openbao_rotation_collection_failures_total counter
 openbao_rotation_collection_failures_total{reason="unavailable"} 2
+# HELP openbao_rotation_collection_interval_seconds The configured time between collections.
+# TYPE openbao_rotation_collection_interval_seconds gauge
+openbao_rotation_collection_interval_seconds 3600
 # HELP openbao_rotation_collection_success Whether the latest collection authenticated and read at least one key.
 # TYPE openbao_rotation_collection_success gauge
 openbao_rotation_collection_success 1
@@ -43,6 +46,7 @@ var exporterMetricNames = []string{
 	"openbao_rotation_build_info",
 	"openbao_rotation_collection_duration_seconds",
 	"openbao_rotation_collection_failures_total",
+	"openbao_rotation_collection_interval_seconds",
 	"openbao_rotation_collection_success",
 	"openbao_rotation_key_due_timestamp_seconds",
 	"openbao_rotation_key_failures_total",
@@ -57,6 +61,7 @@ func TestExposition(t *testing.T) {
 		Success:     true,
 		LastSuccess: base.Add(time.Second),
 		Duration:    1500 * time.Millisecond,
+		Interval:    time.Hour,
 		Failures:    map[string]uint64{"unavailable": 2},
 		Keys: []collector.KeyStatus{
 			{Key: `app/"db"`, Due: base.Add(500 * time.Millisecond), Failures: map[string]uint64{"forbidden": 3, "timeout": 1}},

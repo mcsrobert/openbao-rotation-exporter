@@ -85,6 +85,7 @@ contact OpenBao, so scrapes are cheap and cannot trigger logins.
 | `openbao_rotation_collection_success` | Whether the latest collection succeeded |
 | `openbao_rotation_last_success_timestamp_seconds` | Last successful collection, or 0 if none since start |
 | `openbao_rotation_collection_duration_seconds` | Duration of the latest collection |
+| `openbao_rotation_collection_interval_seconds` | Configured `collection.interval` |
 | `openbao_rotation_collection_failures_total{reason}` | Failed collections |
 | `openbao_rotation_build_info{version}` | Always 1 |
 

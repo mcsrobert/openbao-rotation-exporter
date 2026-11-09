@@ -60,6 +60,7 @@ for expected in \
   'openbao_rotation_build_info{version="smoke"} 1' \
   'openbao_rotation_collection_success 0' \
   'openbao_rotation_last_success_timestamp_seconds 0' \
+  'openbao_rotation_collection_interval_seconds 300' \
   'openbao_rotation_key_up{key="app/database"} 0' \
   'openbao_rotation_collection_failures_total{reason="credentials"} 1'; do
   if ! grep --fixed-strings --quiet "${expected}" <<< "${metrics}"; then
