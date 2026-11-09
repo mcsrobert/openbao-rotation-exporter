@@ -179,7 +179,12 @@ jobs:
           VERSION: ${{ needs.publish.outputs.version }}
         run: |
           directory=$(mktemp -d)
-          output=$(helm pull "oci://${CHART_REGISTRY}/${CHART_NAME}" --version "${VERSION}" --destination "${directory}" 2>&1)
+          export HELM_REGISTRY_CONFIG="${directory}/registry.json"
+          if ! output=$(helm pull "oci://${CHART_REGISTRY}/${CHART_NAME}" --version "${VERSION}" --destination "${directory}" 2>&1); then
+            echo "${output}"
+            echo "::error::Anonymous chart pull failed. Check the chart package visibility separately from the image; see README.md#release-package-access."
+            exit 1
+          fi
           echo "${output}"
           if [[ "$(sed -n 's/^Digest: //p' <<< "${output}")" != "${CHART_DIGEST}" ]]; then
             echo "Expected chart digest ${CHART_DIGEST}"

@@ -192,6 +192,34 @@ mise run test:chart
 
 `mise run test:image` and `mise run test:e2e` also need Docker.
 
+## Release package access
+
+GHCR creates new packages as private, even for a public repository. The image
+`mcsrobert/openbao-rotation-exporter` and chart
+`mcsrobert/charts/openbao-rotation-exporter` are separate packages; making the
+image public does not make the chart public.
+
+After the first publication, a package owner must open each package under the
+[mcsrobert Packages page](https://github.com/mcsrobert?tab=packages), select
+**Package settings**, then **Change visibility** and **Public**. See
+[GitHub's package visibility documentation](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility).
+This is a package setting, not a chart value or repository permission.
+
+The release workflow verifies anonymous pulls of both artifacts. If the chart
+check fails with `403 Forbidden` or `DENIED`, check the chart package's visibility
+separately. After changing it, verify the existing version without Helm registry
+credentials:
+
+```sh
+HELM_REGISTRY_CONFIG="$(mktemp)" helm pull \
+  oci://ghcr.io/mcsrobert/charts/openbao-rotation-exporter \
+  --version <version> --destination /tmp
+```
+
+Then re-run only the failed jobs of the original release workflow run. Do not
+re-run the successful publishing job or move the tag: the workflow refuses to
+overwrite published versions.
+
 ## License
 
 [Apache-2.0](./LICENSE)
