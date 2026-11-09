@@ -16,7 +16,7 @@ spec:
     - name: {{ $fullname }}
       rules:
         - alert: OpenBaoRotationDue
-          expr: time() > openbao_rotation_key_due_timestamp_seconds{ {{- $selector -}} }
+          expr: time() > max by (job, namespace, key) (openbao_rotation_key_due_timestamp_seconds{ {{- $selector -}} })
           for: 15m
           {{- with .Values.prometheusRule.alertLabels }}
           labels:
@@ -29,7 +29,7 @@ spec:
               {{ "{{" }} $value | humanizeTimestamp {{ "}}" }}. Rotate the credential and write the
               new value to OpenBao.
         - alert: OpenBaoRotationKeyFailing
-          expr: openbao_rotation_key_up{ {{- $selector -}} } == 0
+          expr: max by (job, namespace, key) (openbao_rotation_key_up{ {{- $selector -}} }) == 0
           for: 15m
           {{- with .Values.prometheusRule.alertLabels }}
           labels:
