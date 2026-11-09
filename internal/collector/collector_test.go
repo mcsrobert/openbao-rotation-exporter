@@ -6,6 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -21,18 +23,42 @@ var (
 	down   = &openbao.Error{Reason: openbao.ReasonUnavailable, Err: errors.New("down")}
 )
 
+var issued = openbao.Credential{Token: "token", Revocable: true}
+
 type fakeSource struct {
-	mu       sync.Mutex
-	loginErr error
-	created  map[string]time.Time
-	errs     map[string]error
-	onRead   func(ctx context.Context, key string)
+	mu        sync.Mutex
+	loginErr  error
+	created   map[string]time.Time
+	errs      map[string]error
+	onRead    func(ctx context.Context, key string)
+	revokeErr error
+	onRevoke  func(ctx context.Context)
+	revoked   []openbao.Credential
 }
 
-func (f *fakeSource) Login(context.Context) (string, error) {
+func (f *fakeSource) Login(context.Context) (openbao.Credential, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return "token", f.loginErr
+	if f.loginErr != nil {
+		return openbao.Credential{}, f.loginErr
+	}
+	return issued, nil
+}
+
+func (f *fakeSource) Revoke(ctx context.Context, credential openbao.Credential) error {
+	if f.onRevoke != nil {
+		f.onRevoke(ctx)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.revoked = append(f.revoked, credential)
+	return f.revokeErr
+}
+
+func (f *fakeSource) revocations() []openbao.Credential {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.revoked)
 }
 
 func (f *fakeSource) CurrentVersionCreated(ctx context.Context, token, key string) (time.Time, error) {
@@ -342,6 +368,109 @@ func TestCollectionTimeoutReachesSource(t *testing.T) {
 	if !hasDeadline.Load() {
 		t.Fatal("reads have no deadline")
 	}
+}
+
+func TestRevokesTokenAfterPublishing(t *testing.T) {
+	var reads atomic.Int32
+	source := &fakeSource{created: map[string]time.Time{"a": base, "b": base}}
+	source.onRead = func(context.Context, string) { reads.Add(1) }
+	c := newCollector(source, &fakeClock{now: base}, map[string]time.Duration{"a": time.Hour, "b": time.Hour})
+	source.onRevoke = func(context.Context) {
+		if got := reads.Swap(0); got != 2 {
+			t.Errorf("revoked after %d of 2 reads", got)
+		}
+		if !c.Snapshot().Attempted {
+			t.Error("revoked before the snapshot was published")
+		}
+	}
+
+	c.Collect(t.Context())
+	c.Collect(t.Context())
+
+	if got := source.revocations(); !slices.Equal(got, []openbao.Credential{issued, issued}) {
+		t.Fatalf("revoked = %v, want each collection's credential once", got)
+	}
+}
+
+func TestNothingToRevokeAfterLoginFailure(t *testing.T) {
+	source := &fakeSource{loginErr: down}
+	c := newCollector(source, &fakeClock{now: base}, map[string]time.Duration{"a": time.Hour})
+	c.Collect(t.Context())
+	if got := source.revocations(); len(got) != 0 {
+		t.Fatalf("revoked = %v", got)
+	}
+}
+
+func TestRevokeFailureDoesNotFailCollection(t *testing.T) {
+	var logs strings.Builder
+	clock := &fakeClock{now: base}
+	source := &fakeSource{created: map[string]time.Time{"a": base}, revokeErr: forbid}
+	c := New(source, Options{
+		Keys:        map[string]time.Duration{"a": time.Hour},
+		Interval:    5 * time.Minute,
+		Timeout:     time.Minute,
+		Concurrency: 1,
+		Now:         clock.Now,
+		Logger:      slog.New(slog.NewTextHandler(&logs, nil)),
+	})
+
+	c.Collect(t.Context())
+
+	s := c.Snapshot()
+	if !s.Success || !s.LastSuccess.Equal(base) || len(s.Failures) != 0 {
+		t.Fatalf("unexpected state: %+v", s)
+	}
+	if a := keyStatus(t, s, "a"); !a.Up || len(a.Failures) != 0 {
+		t.Fatalf("a = %+v", a)
+	}
+	if !strings.Contains(logs.String(), `msg="token revocation failed" reason=forbidden`) {
+		t.Fatalf("no revocation warning in logs:\n%s", logs.String())
+	}
+}
+
+func TestRevokeOutlivesCollectionContext(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		tests := []struct {
+			name   string
+			ctx    func() context.Context
+			onRead func(ctx context.Context, cancel context.CancelFunc)
+		}{
+			{name: "collection timeout", onRead: func(ctx context.Context, _ context.CancelFunc) { <-ctx.Done() }},
+			{name: "shutdown", onRead: func(_ context.Context, cancel context.CancelFunc) { cancel() }},
+		}
+		for _, tt := range tests {
+			ctx, cancel := context.WithCancel(t.Context())
+			source := &fakeSource{}
+			source.onRead = func(ctx context.Context, _ string) { tt.onRead(ctx, cancel) }
+			var revokeErr error
+			var revokeDeadline time.Time
+			source.onRevoke = func(ctx context.Context) {
+				revokeErr = ctx.Err()
+				revokeDeadline, _ = ctx.Deadline()
+			}
+			c := New(source, Options{
+				Keys:        map[string]time.Duration{"a": time.Hour},
+				Interval:    5 * time.Minute,
+				Timeout:     time.Minute,
+				Concurrency: 1,
+				Now:         time.Now,
+				Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+			})
+
+			c.Collect(ctx)
+			cancel()
+
+			if len(source.revocations()) != 1 {
+				t.Fatalf("%s: revoked %d times", tt.name, len(source.revocations()))
+			}
+			if revokeErr != nil {
+				t.Fatalf("%s: revocation context is done: %v", tt.name, revokeErr)
+			}
+			if revokeDeadline.IsZero() || time.Until(revokeDeadline) > revokeTimeout {
+				t.Fatalf("%s: revocation deadline = %s", tt.name, revokeDeadline)
+			}
+		}
+	})
 }
 
 func TestRunCollectsOnEveryInterval(t *testing.T) {

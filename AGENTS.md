@@ -24,7 +24,7 @@ examples/                       OpenBao policy
 ## Rules
 
 - Never call a KV `data` path or otherwise read secret values. The client only
-  needs the login and metadata endpoints.
+  needs the login, `auth/token/revoke-self` and metadata endpoints.
 - Never put tokens, JWTs or OpenBao response bodies in errors or logs.
 - HTTP endpoints serve the latest snapshot. They must not contact OpenBao.
 - Label values must stay bounded: configured keys and the reasons in
