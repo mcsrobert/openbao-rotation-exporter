@@ -1,7 +1,7 @@
 // Package openbao is a minimal client for OpenBao login and KV v2 metadata.
 //
-// It only ever calls the login and metadata endpoints, so it has no way to
-// read secret values.
+// It only ever calls the login, token revocation and metadata endpoints, so it
+// has no way to read secret values.
 package openbao
 
 import (
@@ -80,31 +80,55 @@ func New(cfg config.OpenBao, now func() time.Time) (*Client, error) {
 	}, nil
 }
 
-// Login returns a token to use for metadata requests.
-func (c *Client) Login(ctx context.Context) (string, error) {
+// Credential is a token for one collection.
+type Credential struct {
+	Token string
+	// Revocable reports whether the token was issued for this collection and
+	// should be revoked once it is done. Tokens from a token file belong to
+	// the operator, and batch tokens cannot be revoked.
+	Revocable bool
+}
+
+// Login returns a credential to use for metadata requests.
+func (c *Client) Login(ctx context.Context) (Credential, error) {
 	if c.auth.TokenFile != "" {
-		return readCredential(c.auth.TokenFile)
+		token, err := readCredential(c.auth.TokenFile)
+		return Credential{Token: token}, err
 	}
 
 	k := c.auth.Kubernetes
 	jwt, err := readCredential(k.JWTFile)
 	if err != nil {
-		return "", err
+		return Credential{}, err
 	}
 	var response struct {
 		Auth struct {
 			ClientToken string `json:"client_token"`
+			TokenType   string `json:"token_type"`
 		} `json:"auth"`
 	}
 	body := map[string]string{"role": k.Role, "jwt": jwt}
 	path := c.base.JoinPath("v1", "auth", escapePath(k.Mount), "login")
 	if err := c.do(ctx, http.MethodPost, path, "", body, &response); err != nil {
-		return "", fmt.Errorf("login: %w", err)
+		return Credential{}, fmt.Errorf("login: %w", err)
 	}
 	if response.Auth.ClientToken == "" {
-		return "", &Error{ReasonInvalidResponse, errors.New("login: response has no client token")}
+		return Credential{}, &Error{ReasonInvalidResponse, errors.New("login: response has no client token")}
 	}
-	return response.Auth.ClientToken, nil
+	return Credential{Token: response.Auth.ClientToken, Revocable: response.Auth.TokenType != "batch"}, nil
+}
+
+// Revoke revokes a revocable credential with its own token. It does nothing
+// for other credentials.
+func (c *Client) Revoke(ctx context.Context, credential Credential) error {
+	if !credential.Revocable {
+		return nil
+	}
+	path := c.base.JoinPath("v1", "auth", "token", "revoke-self")
+	if err := c.do(ctx, http.MethodPost, path, credential.Token, nil, nil); err != nil {
+		return fmt.Errorf("revoke token: %w", err)
+	}
+	return nil
 }
 
 // CurrentVersionCreated returns the creation time of the current version of
@@ -178,6 +202,9 @@ func (c *Client) do(ctx context.Context, method string, target *url.URL, token s
 	// Response bodies are never included in errors, so they cannot reach logs.
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return &Error{statusReason(response.StatusCode), fmt.Errorf("unexpected status %d", response.StatusCode)}
+	}
+	if out == nil {
+		return nil
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxResponseSize))
 	if err := decoder.Decode(out); err != nil {

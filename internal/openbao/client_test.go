@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -223,19 +224,19 @@ func TestKubernetesLogin(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
 		}
-		_, _ = fmt.Fprint(w, `{"auth":{"client_token":"issued"}}`)
+		_, _ = fmt.Fprint(w, `{"auth":{"client_token":"issued","token_type":"service"}}`)
 	}))
 	t.Cleanup(server.Close)
 
 	jwtFile := writeFile(t, "first-jwt\n")
 	client := newClient(t, server.URL, config.Auth{Kubernetes: &config.Kubernetes{Mount: "k8s/home", Role: "rotation", JWTFile: jwtFile}})
 
-	token, err := client.Login(t.Context())
+	credential, err := client.Login(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if token != "issued" {
-		t.Fatalf("token = %q", token)
+	if credential != (Credential{Token: "issued", Revocable: true}) {
+		t.Fatalf("credential = %+v", credential)
 	}
 	if path != "/v1/auth/k8s/home/login" {
 		t.Fatalf("path = %q", path)
@@ -252,6 +253,33 @@ func TestKubernetesLogin(t *testing.T) {
 	}
 	if body["jwt"] != "rotated-jwt" {
 		t.Fatalf("the rotated JWT was not reread: %v", body)
+	}
+}
+
+func TestKubernetesLoginTokenTypes(t *testing.T) {
+	tests := []struct {
+		auth      string
+		revocable bool
+	}{
+		{auth: `{"client_token":"issued","token_type":"service"}`, revocable: true},
+		{auth: `{"client_token":"issued","token_type":"batch"}`, revocable: false},
+		{auth: `{"client_token":"issued"}`, revocable: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.auth, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = fmt.Fprintf(w, `{"auth":%s}`, tt.auth)
+			}))
+			t.Cleanup(server.Close)
+			client := newClient(t, server.URL, config.Auth{Kubernetes: &config.Kubernetes{Mount: "kubernetes", Role: "rotation", JWTFile: writeFile(t, "jwt")}})
+			credential, err := client.Login(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if credential.Revocable != tt.revocable {
+				t.Fatalf("revocable = %t, want %t", credential.Revocable, tt.revocable)
+			}
+		})
 	}
 }
 
@@ -291,12 +319,77 @@ func TestKubernetesLoginFailures(t *testing.T) {
 
 func TestTokenFileLogin(t *testing.T) {
 	client := newClient(t, "http://127.0.0.1:1", config.Auth{TokenFile: writeFile(t, "static-token\n")})
-	token, err := client.Login(t.Context())
+	credential, err := client.Login(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if token != "static-token" {
-		t.Fatalf("token = %q", token)
+	if credential != (Credential{Token: "static-token"}) {
+		t.Fatalf("credential = %+v, want a token that is not revocable", credential)
+	}
+}
+
+func TestRevoke(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/token/revoke-self" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("X-Vault-Token"); got != "issued" {
+			t.Errorf("token header = %q", got)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+
+	client := newClient(t, server.URL, config.Auth{})
+	if err := client.Revoke(t.Context(), Credential{Token: "issued", Revocable: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("requests = %d", got)
+	}
+}
+
+func TestRevokeSkipsCredentialsThatAreNotRevocable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(server.Close)
+
+	client := newClient(t, server.URL, config.Auth{})
+	if err := client.Revoke(t.Context(), Credential{Token: "static-token"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRevokeFailures(t *testing.T) {
+	const token = "s3cret-token"
+	const marker = "s3cret-marker"
+	tests := []struct {
+		status int
+		reason string
+	}{
+		{status: 400, reason: ReasonHTTPError},
+		{status: 403, reason: ReasonForbidden},
+		{status: 503, reason: ReasonUnavailable},
+	}
+	for _, tt := range tests {
+		t.Run(strconv.Itoa(tt.status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = fmt.Fprintf(w, `{"errors":["%s %s"]}`, marker, token)
+			}))
+			t.Cleanup(server.Close)
+
+			err := newClient(t, server.URL, config.Auth{}).Revoke(t.Context(), Credential{Token: token, Revocable: true})
+			if ReasonOf(err) != tt.reason {
+				t.Fatalf("reason = %q (error %v), want %q", ReasonOf(err), err, tt.reason)
+			}
+			if strings.Contains(err.Error(), marker) || strings.Contains(err.Error(), token) {
+				t.Fatalf("error contains the token or response body: %v", err)
+			}
+		})
 	}
 }
 

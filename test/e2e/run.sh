@@ -44,7 +44,8 @@ bao write auth/kubernetes/role/openbao-rotation-exporter \
   bound_service_account_namespaces=rotation \
   token_ttl=5m \
   token_max_ttl=5m \
-  token_policies=rotation
+  token_policies=rotation \
+  token_no_default_policy=true
 
 kubectl apply --filename test/e2e/namespace.yaml
 helm install openbao-rotation-exporter charts/openbao-rotation-exporter \
@@ -74,6 +75,22 @@ for expected in \
     exit 1
   fi
 done
+
+token_count() {
+  bao list -format=json auth/token/accessors | grep --count '"'
+}
+
+tokens_before=$(token_count)
+sleep 35
+tokens_after=$(token_count)
+if (( tokens_after > tokens_before + 1 )); then
+  echo "tokens grew from ${tokens_before} to ${tokens_after} across collections" >&2
+  exit 1
+fi
+if kubectl --namespace rotation logs deployment/openbao-rotation-exporter | grep --fixed-strings 'token revocation failed'; then
+  echo "the exporter failed to revoke its tokens" >&2
+  exit 1
+fi
 
 kubectl --namespace rotation get servicemonitor/openbao-rotation-exporter prometheusrule/openbao-rotation-exporter
 

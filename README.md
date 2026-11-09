@@ -56,18 +56,31 @@ The command line accepts `--config`, `--listen-address` (default `:8080`) and
 
 ## OpenBao access
 
-The exporter needs read access to metadata and nothing else. Replace `MOUNT` in
+The exporter needs read access to metadata and permission to revoke its own
+token, and nothing else. Replace `MOUNT` in
 [`examples/policy.hcl`](./examples/policy.hcl) with your mount:
 
 ```hcl
 path "MOUNT/metadata/*" {
   capabilities = ["read"]
 }
+
+path "auth/token/revoke-self" {
+  capabilities = ["update"]
+}
 ```
 
-With Kubernetes auth, a collection logs in once and the token is not reused.
-Keep the role's `token_ttl` above `collection.timeout`; five minutes works with
-the defaults.
+OpenBao's `default` policy also allows `auth/token/revoke-self`, but a role with
+`token_no_default_policy` does not get it.
+
+With Kubernetes auth, a collection logs in once and revokes the token through
+`auth/token/revoke-self` after its reads, so tokens do not pile up. Revocation is
+best effort: a failure logs a warning and does not fail the collection. Batch
+tokens cannot be revoked, so they are left to expire. A token from
+`auth.tokenFile` belongs to you and is never revoked.
+
+Keep the role's `token_ttl` above `collection.timeout`, and short, so a token
+that could not be revoked expires soon. Five minutes works with the defaults.
 
 The client does not follow redirects, so a redirect cannot send the token to
 another host. Point `openbao.address` at a server that answers directly.

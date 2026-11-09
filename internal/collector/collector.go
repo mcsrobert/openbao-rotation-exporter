@@ -16,9 +16,16 @@ import (
 
 // Source reads rotation metadata.
 type Source interface {
-	Login(ctx context.Context) (string, error)
+	Login(ctx context.Context) (openbao.Credential, error)
 	CurrentVersionCreated(ctx context.Context, token, key string) (time.Time, error)
+	// Revoke releases a credential from Login once a collection is done with
+	// it.
+	Revoke(ctx context.Context, credential openbao.Credential) error
 }
+
+// revokeTimeout bounds token revocation, which still runs after the collection
+// timeout has expired or a shutdown has canceled the collection.
+const revokeTimeout = 5 * time.Second
 
 // Options configures a Collector.
 type Options struct {
@@ -129,7 +136,7 @@ func (c *Collector) Collect(ctx context.Context) {
 	next := c.snapshot.Load().clone()
 	next.Attempted = true
 
-	token, err := c.source.Login(collectCtx)
+	credential, err := c.source.Login(collectCtx)
 	if err != nil {
 		if ctx.Err() != nil {
 			return
@@ -139,7 +146,10 @@ func (c *Collector) Collect(ctx context.Context) {
 		next.Failures[reason]++
 		c.logger.Warn("login failed", "reason", reason, "error", err)
 	} else {
-		results := c.readKeys(collectCtx, token, next.Keys)
+		// Deferred, so the snapshot is published first and the token is also
+		// revoked when the collection is canceled.
+		defer c.revoke(ctx, credential)
+		results := c.readKeys(collectCtx, credential.Token, next.Keys)
 		if ctx.Err() != nil {
 			return
 		}
@@ -157,6 +167,16 @@ func (c *Collector) Collect(ctx context.Context) {
 }
 
 const allKeysFailed = "all_keys_failed"
+
+// revoke is best effort. A token that is not revoked expires with its TTL, so a
+// failure does not affect the collection.
+func (c *Collector) revoke(ctx context.Context, credential openbao.Credential) {
+	revokeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), revokeTimeout)
+	defer cancel()
+	if err := c.source.Revoke(revokeCtx, credential); err != nil {
+		c.logger.Warn("token revocation failed", "reason", openbao.ReasonOf(err), "error", err)
+	}
+}
 
 type readResult struct {
 	created time.Time
