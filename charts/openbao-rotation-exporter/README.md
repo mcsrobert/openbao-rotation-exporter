@@ -89,5 +89,5 @@ share a cluster. Alertmanager should use a long `repeat_interval` for
 | --- | --- |
 | `OpenBaoRotationDue` | A key has passed its due time for 15 minutes |
 | `OpenBaoRotationKeyFailing` | A key's metadata could not be read for 15 minutes |
-| `OpenBaoRotationCollectionStale` | Nothing has been collected for 35 minutes |
+| `OpenBaoRotationCollectionStale` | No collection has succeeded for three collection intervals, or 30 minutes if that is longer, plus 5 minutes |
 | `OpenBaoRotationExporterDown` | The exporter could not be scraped for 15 minutes |

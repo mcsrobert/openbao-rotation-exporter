@@ -106,7 +106,7 @@ Missing or stale data must not make an overdue secret look healthy.
 | Event | Exporter | Chart alert |
 | --- | --- | --- |
 | One key fails | Keeps its last known due time, `key_up` is 0 | `OpenBaoRotationDue` keeps firing, `OpenBaoRotationKeyFailing` fires |
-| Whole collection fails | Still returns 200 with the last snapshot, `collection_success` is 0 | `OpenBaoRotationCollectionStale` fires, the exporter is not reported as down |
+| Whole collection fails | Still returns 200 with the last snapshot, `collection_success` is 0 | `OpenBaoRotationCollectionStale` fires after the longer of 30 minutes and three intervals, the exporter is not reported as down |
 | Restart, then first collection fails | No due series, `key_up` is 0, last success is 0 | `OpenBaoRotationCollectionStale` and `OpenBaoRotationKeyFailing` fire |
 | Key removed from the config | Series goes away | None |
 | Current version deleted or destroyed | Keeps its last known due time, `key_up` is 0 | `OpenBaoRotationKeyFailing` fires |
