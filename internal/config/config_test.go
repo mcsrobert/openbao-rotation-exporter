@@ -93,6 +93,28 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultTimeoutFollowsInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		interval string
+		want     time.Duration
+	}{
+		{"interval below default", "30s", 30 * time.Second},
+		{"interval above default", "10m", time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := Load(writeConfig(t, validConfig+"collection:\n  interval: "+tt.interval+"\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Collection.Timeout != tt.want {
+				t.Fatalf("timeout = %s, want %s", cfg.Collection.Timeout, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadRejects(t *testing.T) {
 	replace := func(old, replacement string) string {
 		if !strings.Contains(validConfig, old) {

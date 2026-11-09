@@ -44,7 +44,7 @@ keys:
 | `openbao.auth.kubernetes.mount` | `kubernetes` | Kubernetes auth mount |
 | `openbao.auth.kubernetes.jwtFile` | The pod's service account token | JWT to log in with |
 | `collection.interval` | `5m` | Time between collections |
-| `collection.timeout` | `1m` | Limit for one collection, at most the interval |
+| `collection.timeout` | `1m` or the interval, if shorter | Limit for one collection, at most the interval |
 | `collection.concurrency` | `8` | Simultaneous key reads |
 | `keys` | required | Key paths relative to the mount, with intervals |
 

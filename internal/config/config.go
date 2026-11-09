@@ -133,6 +133,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Collection.Timeout == 0 {
 		c.Collection.Timeout = defaultCollectionTimeout
+		if c.Collection.Interval > 0 {
+			c.Collection.Timeout = min(c.Collection.Timeout, c.Collection.Interval)
+		}
 	}
 	if c.Collection.Concurrency == 0 {
 		c.Collection.Concurrency = defaultConcurrency
