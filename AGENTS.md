@@ -3,7 +3,7 @@
 A Prometheus exporter for OpenBao KV v2 rotation deadlines. The
 [README](./README.md) is the contract: its configuration, metric names and
 failure behavior are public API, so change them deliberately and keep the
-README, `examples/alerts.yaml` and its tests in step.
+README, the chart and its tests in step.
 
 ## Layout
 
@@ -14,9 +14,11 @@ internal/openbao/               Login and KV v2 metadata client
 internal/collector/             Background loop and immutable snapshots
 internal/metrics/               Prometheus exposition of a snapshot
 internal/server/                HTTP endpoints
+charts/openbao-rotation-exporter/  Helm chart with the alert rules
 test/integration/               Tests against a real OpenBao dev server
-test/e2e/                       kind test with Kubernetes auth
-examples/                       Policy, alert rules and manifests
+test/chart/                     Chart rendering and alert rule tests
+test/e2e/                       kind test of the chart with Kubernetes auth
+examples/                       OpenBao policy
 ```
 
 ## Rules
@@ -27,6 +29,8 @@ examples/                       Policy, alert rules and manifests
 - HTTP endpoints serve the latest snapshot. They must not contact OpenBao.
 - Label values must stay bounded: configured keys and the reasons in
   `internal/openbao/errors.go`.
+- A new configuration field also goes in the chart's `values.schema.json`, which
+  rejects unknown fields.
 - Do not bump dependency, image or action versions by hand. Renovate manages
   them.
 - Do not add explanatory comments to workflows or configuration files. Keep
@@ -40,7 +44,7 @@ Run `mise run setup` once per checkout.
 mise run lint
 mise run test
 mise run test:integration
-mise run test:rules
+mise run test:chart
 mise run test:image    # needs Docker
 mise run test:e2e      # needs Docker
 ```
@@ -50,4 +54,6 @@ mise run test:e2e      # needs Docker
 - Commit messages are conventional commits with a scope, such as
   `fix(collector): keep the last due time`. A hook rejects anything else.
 - Changes reach `main` through a pull request, with the `ci` check passing.
-- Releases are `vX.Y.Z` tags. They publish an immutable image tagged `X.Y.Z`.
+- Releases are `vX.Y.Z` tags. They publish an immutable image and chart, both
+  versioned `X.Y.Z`. The chart in git has a placeholder version, and the release
+  sets its version and pins the image digest.

@@ -20,7 +20,7 @@
     {
       description: 'Update annotated dependencies',
       customType: 'regex',
-      managerFilePatterns: ['/\\.ya?ml$/'],
+      managerFilePatterns: ['/\\.ya?ml$/', '/\\.sh$/'],
       matchStrings: ['datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n.*[:=]\\s*["\']?(?<currentValue>[^"\'\\s]+)["\']?'],
       versioningTemplate: 'semver-coerced',
     },

@@ -102,7 +102,7 @@ Key paths are metric labels, so anyone who can scrape the exporter can see them.
 
 Missing or stale data must not make an overdue secret look healthy.
 
-| Event | Exporter | Example alert |
+| Event | Exporter | Chart alert |
 | --- | --- | --- |
 | One key fails | Keeps its last known due time, `key_up` is 0 | `OpenBaoRotationDue` keeps firing, `OpenBaoRotationKeyFailing` fires |
 | Whole collection fails | Still returns 200 with the last snapshot, `collection_success` is 0 | `OpenBaoRotationCollectionStale` fires, the exporter is not reported as down |
@@ -127,23 +127,35 @@ would stop scrapes and hide the failure metrics.
 
 ## Deployment
 
-Images are published to `ghcr.io/mcsrobert/openbao-rotation-exporter` for
-`linux/amd64` and `linux/arm64`. Version tags are never overwritten. They run as
-a non-root user and work with a read-only root filesystem and no capabilities.
+Install the Helm chart from GHCR:
 
-Pin the digest and verify the build provenance:
+```sh
+helm install openbao-rotation-exporter \
+  oci://ghcr.io/mcsrobert/charts/openbao-rotation-exporter \
+  --version <version> \
+  --namespace rotation \
+  --values values.yaml
+```
+
+It creates the Deployment, a `ServiceMonitor` and alert rules. The
+[chart README](./charts/openbao-rotation-exporter/README.md) lists its values
+and alerts.
+
+Each release publishes an image and a chart with the same version. Both are for
+`linux/amd64` and `linux/arm64` hosts, and version tags are never overwritten.
+The chart pins the image by digest. The image runs as a non-root user and works
+with a read-only root filesystem and no capabilities.
+
+Verify the build provenance of either one:
 
 ```sh
 gh attestation verify \
   oci://ghcr.io/mcsrobert/openbao-rotation-exporter:<version> \
   --repo mcsrobert/openbao-rotation-exporter
+gh attestation verify \
+  oci://ghcr.io/mcsrobert/charts/openbao-rotation-exporter:<version> \
+  --repo mcsrobert/openbao-rotation-exporter
 ```
-
-[`examples/kubernetes`](./examples/kubernetes) has a hardened Deployment, used
-by the end-to-end test, and [`examples/alerts.yaml`](./examples/alerts.yaml) has
-alert rules, tested by
-[`examples/alerts.test.yaml`](./examples/alerts.test.yaml). If your job label is
-not `openbao-rotation-exporter`, change it in `OpenBaoRotationExporterDown`.
 
 An overdue key keeps its alert firing until a new version is written, so set a
 long `repeat_interval` for these alerts in Alertmanager.
@@ -161,7 +173,7 @@ mise run setup
 mise run lint
 mise run test
 mise run test:integration
-mise run test:rules
+mise run test:chart
 ```
 
 `mise run test:image` and `mise run test:e2e` also need Docker.

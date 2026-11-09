@@ -3,6 +3,8 @@ set -euo pipefail
 
 cluster=openbao-rotation-exporter-e2e
 image=openbao-rotation-exporter:e2e
+# renovate: datasource=github-releases depName=prometheus-operator/prometheus-operator
+prometheus_operator_version=v0.94.2
 
 cleanup() {
   status=$?
@@ -21,6 +23,9 @@ trap cleanup EXIT
 
 docker build --build-arg VERSION=e2e --tag "${image}" .
 kind load docker-image --name "${cluster}" "${image}"
+
+kubectl apply --server-side \
+  --filename "https://github.com/prometheus-operator/prometheus-operator/releases/download/${prometheus_operator_version}/stripped-down-crds.yaml"
 
 kubectl apply --filename test/e2e/openbao.yaml
 kubectl --namespace openbao rollout status deployment/openbao --timeout=180s
@@ -41,7 +46,10 @@ bao write auth/kubernetes/role/openbao-rotation-exporter \
   token_max_ttl=5m \
   token_policies=rotation
 
-kubectl apply --kustomize test/e2e
+kubectl apply --filename test/e2e/namespace.yaml
+helm install openbao-rotation-exporter charts/openbao-rotation-exporter \
+  --namespace rotation \
+  --values test/e2e/values.yaml
 kubectl --namespace rotation rollout status deployment/openbao-rotation-exporter --timeout=180s
 
 metrics=""
@@ -66,5 +74,7 @@ for expected in \
     exit 1
   fi
 done
+
+kubectl --namespace rotation get servicemonitor/openbao-rotation-exporter prometheusrule/openbao-rotation-exporter
 
 echo "e2e passed"
