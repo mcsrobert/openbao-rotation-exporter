@@ -32,8 +32,12 @@ config:
 ```
 
 The Kubernetes auth role must bind the release's service account and namespace.
-The service account is named after the release, or `openbao-rotation-exporter`
-when the release has that name.
+By default, its name is `<release>-openbao-rotation-exporter`, for example
+`other-openbao-rotation-exporter` for release `other`. If the release name already
+contains `openbao-rotation-exporter`, that release name is used directly.
+`nameOverride` and `fullnameOverride` affect the generated name; set
+`serviceAccount.name` to choose an explicit name. With `serviceAccount.create=false`,
+the chart uses `serviceAccount.name`, or `default` when no name is provided.
 
 `ServiceMonitor` and `PrometheusRule` are on by default and need the
 `monitoring.coreos.com` CRDs. Without them, set `serviceMonitor.enabled` and

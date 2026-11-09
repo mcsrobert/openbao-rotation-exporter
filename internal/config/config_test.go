@@ -108,6 +108,8 @@ func TestLoadRejects(t *testing.T) {
 		{"empty file", "", "file is empty"},
 		{"unknown field", validConfig + "extra: true\n", "extra"},
 		{"bad interval", replace("90d", "90"), "invalid interval"},
+		{"null interval", replace("90d", "null"), "interval must be positive"},
+		{"empty interval", replace("90d", ""), "interval must be positive"},
 		{"duplicate key", validConfig + "  app/api: 3w\n", "already defined"},
 		{"no keys", strings.Split(validConfig, "keys:")[0], "at least one key"},
 		{"missing address", replace("address: https://openbao.example.com", "address: ''"), "openbao.address: required"},

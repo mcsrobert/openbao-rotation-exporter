@@ -121,6 +121,28 @@ func TestErrorsDoNotContainResponseBody(t *testing.T) {
 	}
 }
 
+func TestTimestampErrorsDoNotContainResponseValues(t *testing.T) {
+	const marker = "s3cret-marker"
+	for _, field := range []string{"created_time", "deletion_time"} {
+		t.Run(field, func(t *testing.T) {
+			version := map[string]any{"created_time": "2026-01-02T03:04:05Z", "deletion_time": "", "destroyed": false}
+			version[field] = marker
+			body, err := json.Marshal(map[string]any{"data": map[string]any{"current_version": 1, "versions": map[string]any{"1": version}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := newClient(t, metadataServer(t, 200, string(body)).URL, config.Auth{})
+			_, err = client.CurrentVersionCreated(t.Context(), "token", "app/db")
+			if ReasonOf(err) != ReasonInvalidResponse {
+				t.Fatalf("reason = %q, want invalid_response", ReasonOf(err))
+			}
+			if strings.Contains(err.Error(), marker) {
+				t.Fatal("error contains response value")
+			}
+		})
+	}
+}
+
 func TestEscapesKeySegments(t *testing.T) {
 	var got atomic.Value
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
