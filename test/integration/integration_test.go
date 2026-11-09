@@ -13,6 +13,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"log/slog"
 	"net"
@@ -250,7 +251,7 @@ func serviceAccountJWT(t *testing.T) string {
 // as the exporter's service account.
 func tokenReviewServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/apis/authentication.k8s.io/v1/tokenreviews" {
 			t.Errorf("unexpected Kubernetes API request %s", r.URL.Path)
 		}
@@ -277,7 +278,12 @@ func TestKubernetesAuthTokensAreRevoked(t *testing.T) {
 	server.writePolicy()
 	server.writeSecret("app/key")
 	server.mustRoot(http.MethodPost, "sys/auth/kubernetes", map[string]string{"type": "kubernetes"})
-	server.mustRoot(http.MethodPost, "auth/kubernetes/config", map[string]string{"kubernetes_host": tokenReviewServer(t).URL})
+	kubernetes := tokenReviewServer(t)
+	server.mustRoot(http.MethodPost, "auth/kubernetes/config", map[string]any{
+		"kubernetes_host":      kubernetes.URL,
+		"kubernetes_ca_cert":   string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: kubernetes.Certificate().Raw})),
+		"disable_local_ca_jwt": true,
+	})
 	for role, tokenType := range map[string]string{"service": "service", "batch": "batch"} {
 		server.mustRoot(http.MethodPost, "auth/kubernetes/role/"+role, map[string]any{
 			"bound_service_account_names":      []string{serviceAccountName},
