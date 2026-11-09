@@ -53,6 +53,8 @@ type Snapshot struct {
 	// LastSuccess is zero until a collection has succeeded.
 	LastSuccess time.Time
 	Duration    time.Duration
+	// Interval is the configured time between collections.
+	Interval time.Duration
 	// Failures counts failed collections by reason.
 	Failures map[string]uint64
 }
@@ -82,7 +84,7 @@ type Collector struct {
 // New returns a Collector with an initial snapshot in which no key is up.
 func New(source Source, options Options) *Collector {
 	keys := slices.Sorted(maps.Keys(options.Keys))
-	initial := &Snapshot{Keys: make([]KeyStatus, len(keys)), Failures: map[string]uint64{}}
+	initial := &Snapshot{Keys: make([]KeyStatus, len(keys)), Interval: options.Interval, Failures: map[string]uint64{}}
 	for i, key := range keys {
 		initial.Keys[i] = KeyStatus{Key: key, Failures: map[string]uint64{}}
 	}

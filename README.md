@@ -85,6 +85,7 @@ contact OpenBao, so scrapes are cheap and cannot trigger logins.
 | `openbao_rotation_collection_success` | Whether the latest collection succeeded |
 | `openbao_rotation_last_success_timestamp_seconds` | Last successful collection, or 0 if none since start |
 | `openbao_rotation_collection_duration_seconds` | Duration of the latest collection |
+| `openbao_rotation_collection_interval_seconds` | Configured `collection.interval` |
 | `openbao_rotation_collection_failures_total{reason}` | Failed collections |
 | `openbao_rotation_build_info{version}` | Always 1 |
 
@@ -105,7 +106,7 @@ Missing or stale data must not make an overdue secret look healthy.
 | Event | Exporter | Chart alert |
 | --- | --- | --- |
 | One key fails | Keeps its last known due time, `key_up` is 0 | `OpenBaoRotationDue` keeps firing, `OpenBaoRotationKeyFailing` fires |
-| Whole collection fails | Still returns 200 with the last snapshot, `collection_success` is 0 | `OpenBaoRotationCollectionStale` fires, the exporter is not reported as down |
+| Whole collection fails | Still returns 200 with the last snapshot, `collection_success` is 0 | `OpenBaoRotationCollectionStale` fires after the longer of 30 minutes and three intervals, the exporter is not reported as down |
 | Restart, then first collection fails | No due series, `key_up` is 0, last success is 0 | `OpenBaoRotationCollectionStale` and `OpenBaoRotationKeyFailing` fire |
 | Key removed from the config | Series goes away | None |
 | Current version deleted or destroyed | Keeps its last known due time, `key_up` is 0 | `OpenBaoRotationKeyFailing` fires |

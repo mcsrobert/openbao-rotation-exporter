@@ -107,6 +107,9 @@ func TestInitialSnapshot(t *testing.T) {
 	if s.Keys[0].Up || !s.Keys[0].Due.IsZero() {
 		t.Fatalf("key should start down with no due time: %+v", s.Keys[0])
 	}
+	if s.Interval != 5*time.Minute {
+		t.Fatalf("interval = %v, want 5m", s.Interval)
+	}
 }
 
 func TestSuccessfulCollection(t *testing.T) {
@@ -117,7 +120,7 @@ func TestSuccessfulCollection(t *testing.T) {
 	c.Collect(t.Context())
 
 	s := c.Snapshot()
-	if !s.Attempted || !s.Success || !s.LastSuccess.Equal(base) {
+	if !s.Attempted || !s.Success || !s.LastSuccess.Equal(base) || s.Interval != 5*time.Minute {
 		t.Fatalf("unexpected state: %+v", s)
 	}
 	if got := keyStatus(t, s, "a"); !got.Up || !got.Due.Equal(base.Add(23*time.Hour)) {

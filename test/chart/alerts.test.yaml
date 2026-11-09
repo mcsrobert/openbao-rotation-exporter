@@ -14,6 +14,8 @@ tests:
         values: 1 1 1 0x9
       - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation"}
         values: 0+300x12
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 300x12
       - series: up{job="openbao-rotation-exporter",namespace="rotation"}
         values: 1x12
     alert_rule_test:
@@ -130,6 +132,8 @@ tests:
         values: 1x12
       - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation"}
         values: 0+300x12
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 300x12
       - series: up{job="openbao-rotation-exporter",namespace="rotation"}
         values: 1x12
     alert_rule_test:
@@ -150,6 +154,8 @@ tests:
       - series: openbao_rotation_key_up{job="openbao-rotation-exporter",namespace="rotation",key="app/db"}
         values: 1x24
       - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 300x24
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation"}
         values: 300x24
       - series: up{job="openbao-rotation-exporter",namespace="rotation"}
         values: 1x24
@@ -173,8 +179,8 @@ tests:
               job: openbao-rotation-exporter
               namespace: rotation
             exp_annotations:
-              summary: OpenBao rotation metadata has not been collected for 30 minutes
-              description: Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
+              summary: OpenBao rotation metadata is stale
+              description: No collection has succeeded for three collection intervals, and at least 30 minutes. Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
       - eval_time: 60m
         alertname: OpenBaoRotationExporterDown
 
@@ -185,6 +191,8 @@ tests:
         values: 0x12
       - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation"}
         values: 0x12
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 300x12
       - series: up{job="openbao-rotation-exporter",namespace="rotation"}
         values: 1x12
     alert_rule_test:
@@ -196,8 +204,8 @@ tests:
               job: openbao-rotation-exporter
               namespace: rotation
             exp_annotations:
-              summary: OpenBao rotation metadata has not been collected for 30 minutes
-              description: Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
+              summary: OpenBao rotation metadata is stale
+              description: No collection has succeeded for three collection intervals, and at least 30 minutes. Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
       - eval_time: 40m
         alertname: OpenBaoRotationKeyFailing
         exp_alerts:
@@ -209,6 +217,139 @@ tests:
             exp_annotations:
               summary: Cannot read rotation metadata for OpenBao key app/db
               description: Check that the key exists and that the exporter's policy can read its metadata. openbao_rotation_key_failures_total has the reason.
+
+  - name: a long interval with healthy collections and one failed collection is not stale
+    interval: 5m
+    input_series:
+      - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 60x11 3660x11 7260x23 14460x11 18060x11
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 3600x71
+    alert_rule_test:
+      - eval_time: 55m
+        alertname: OpenBaoRotationCollectionStale
+      - eval_time: 115m
+        alertname: OpenBaoRotationCollectionStale
+      - eval_time: 175m
+        alertname: OpenBaoRotationCollectionStale
+      - eval_time: 239m
+        alertname: OpenBaoRotationCollectionStale
+      - eval_time: 355m
+        alertname: OpenBaoRotationCollectionStale
+
+  - name: a long interval reports stale collection after three intervals
+    interval: 5m
+    input_series:
+      - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 60x40
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 3600x40
+    alert_rule_test:
+      - eval_time: 185m
+        alertname: OpenBaoRotationCollectionStale
+      - eval_time: 190m
+        alertname: OpenBaoRotationCollectionStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+            exp_annotations:
+              summary: OpenBao rotation metadata is stale
+              description: No collection has succeeded for three collection intervals, and at least 30 minutes. Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
+
+  - name: a restart during an outage with a long interval reports stale collection straight away
+    interval: 5m
+    start_timestamp: 1767225600
+    input_series:
+      - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 0x12
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 3600x12
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpenBaoRotationCollectionStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+            exp_annotations:
+              summary: OpenBao rotation metadata is stale
+              description: No collection has succeeded for three collection intervals, and at least 30 minutes. Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
+
+  - name: the default interval reports stale collection after 30 minutes
+    interval: 5m
+    input_series:
+      - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 60x12
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 300x12
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: OpenBaoRotationCollectionStale
+      - eval_time: 40m
+        alertname: OpenBaoRotationCollectionStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+            exp_annotations:
+              summary: OpenBao rotation metadata is stale
+              description: No collection has succeeded for three collection intervals, and at least 30 minutes. Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
+
+  - name: an exporter without the interval metric reports stale collection after 30 minutes
+    interval: 5m
+    input_series:
+      - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation"}
+        values: 60x12
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: OpenBaoRotationCollectionStale
+      - eval_time: 40m
+        alertname: OpenBaoRotationCollectionStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+            exp_annotations:
+              summary: OpenBao rotation metadata is stale
+              description: No collection has succeeded for three collection intervals, and at least 30 minutes. Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
+
+  - name: stale collection keeps one alert across a pod rollout
+    interval: 5m
+    input_series:
+      - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation",pod="a",instance="10.0.0.1:8080"}
+        values: 60x7
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation",pod="a",instance="10.0.0.1:8080"}
+        values: 300x7
+      - series: openbao_rotation_last_success_timestamp_seconds{job="openbao-rotation-exporter",namespace="rotation",pod="b",instance="10.0.0.2:8080"}
+        values: _x6 0x6
+      - series: openbao_rotation_collection_interval_seconds{job="openbao-rotation-exporter",namespace="rotation",pod="b",instance="10.0.0.2:8080"}
+        values: _x6 300x6
+    alert_rule_test:
+      - eval_time: 38m
+        alertname: OpenBaoRotationCollectionStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+            exp_annotations:
+              summary: OpenBao rotation metadata is stale
+              description: No collection has succeeded for three collection intervals, and at least 30 minutes. Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
+      - eval_time: 50m
+        alertname: OpenBaoRotationCollectionStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: openbao-rotation-exporter
+              namespace: rotation
+            exp_annotations:
+              summary: OpenBao rotation metadata is stale
+              description: No collection has succeeded for three collection intervals, and at least 30 minutes. Due times may be out of date. Check OpenBao, the exporter's login and the exporter logs.
 
   - name: an unscrapeable exporter is reported as down
     interval: 5m

@@ -41,15 +41,23 @@ spec:
               Check that the key exists and that the exporter's policy can read its metadata.
               openbao_rotation_key_failures_total has the reason.
         - alert: OpenBaoRotationCollectionStale
-          expr: time() - openbao_rotation_last_success_timestamp_seconds{ {{- $selector -}} } > 1800
+          expr: |-
+            time() - max by (job, namespace) (openbao_rotation_last_success_timestamp_seconds{ {{- $selector -}} })
+              > on (job, namespace)
+            (
+                clamp_min(3 * max by (job, namespace) (openbao_rotation_collection_interval_seconds{ {{- $selector -}} }), 1800)
+              or
+                0 * max by (job, namespace) (openbao_rotation_last_success_timestamp_seconds{ {{- $selector -}} }) + 1800
+            )
           for: 5m
           {{- with .Values.prometheusRule.alertLabels }}
           labels:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           annotations:
-            summary: OpenBao rotation metadata has not been collected for 30 minutes
+            summary: OpenBao rotation metadata is stale
             description: >-
+              No collection has succeeded for three collection intervals, and at least 30 minutes.
               Due times may be out of date. Check OpenBao, the exporter's login and the exporter
               logs.
         - alert: OpenBaoRotationExporterDown
