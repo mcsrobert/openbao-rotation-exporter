@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   lint:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -65,7 +65,7 @@ jobs:
         run: mise run test:image
 
   e2e:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     steps:
@@ -84,7 +84,7 @@ jobs:
   ci:
     if: ${{ always() }}
     needs: ["lint", "test", "e2e"]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Check results
         env:
