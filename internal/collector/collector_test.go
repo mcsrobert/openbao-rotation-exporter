@@ -507,3 +507,25 @@ func TestRunCollectsOnEveryInterval(t *testing.T) {
 		<-done
 	})
 }
+
+func TestLoginFailureDoesNotInventAKeyRead(t *testing.T) {
+	clock := &fakeClock{now: base}
+	source := &fakeSource{loginErr: down, created: map[string]time.Time{"a": base}}
+	c := newCollector(source, clock, map[string]time.Duration{"a": time.Hour})
+	c.Collect(t.Context())
+	if got := keyStatus(t, c.Snapshot(), "a"); got.ReadAttempted || len(got.Failures) != 0 {
+		t.Fatalf("login failure must leave key unread: %+v", got)
+	}
+	source.set(func() { source.loginErr = nil })
+	c.Collect(t.Context())
+	before := keyStatus(t, c.Snapshot(), "a")
+	if !before.ReadAttempted || !before.Up {
+		t.Fatalf("successful metadata read not recorded: %+v", before)
+	}
+	source.set(func() { source.loginErr = down })
+	c.Collect(t.Context())
+	after := keyStatus(t, c.Snapshot(), "a")
+	if !after.ReadAttempted || !after.Up || !after.Due.Equal(before.Due) || len(after.Failures) != 0 {
+		t.Fatalf("login failure changed previous read status: %+v", after)
+	}
+}

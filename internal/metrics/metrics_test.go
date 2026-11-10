@@ -36,7 +36,6 @@ openbao_rotation_key_failures_total{key="app/\"db\"",reason="timeout"} 1
 # HELP openbao_rotation_key_up Whether the most recent read of the key succeeded.
 # TYPE openbao_rotation_key_up gauge
 openbao_rotation_key_up{key="app/\"db\""} 0
-openbao_rotation_key_up{key="never-read"} 0
 # HELP openbao_rotation_last_success_timestamp_seconds When a collection last succeeded, or 0 if none has since the process started.
 # TYPE openbao_rotation_last_success_timestamp_seconds gauge
 openbao_rotation_last_success_timestamp_seconds 1.767225601e+09
@@ -64,7 +63,7 @@ func TestExposition(t *testing.T) {
 		Interval:    time.Hour,
 		Failures:    map[string]uint64{"unavailable": 2},
 		Keys: []collector.KeyStatus{
-			{Key: `app/"db"`, Due: base.Add(500 * time.Millisecond), Failures: map[string]uint64{"forbidden": 3, "timeout": 1}},
+			{Key: `app/"db"`, ReadAttempted: true, Due: base.Add(500 * time.Millisecond), Failures: map[string]uint64{"forbidden": 3, "timeout": 1}},
 			{Key: "never-read", Failures: map[string]uint64{}},
 		},
 	}

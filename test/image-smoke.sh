@@ -61,7 +61,6 @@ for expected in \
   'openbao_rotation_collection_success 0' \
   'openbao_rotation_last_success_timestamp_seconds 0' \
   'openbao_rotation_collection_interval_seconds 300' \
-  'openbao_rotation_key_up{key="app/database"} 0' \
   'openbao_rotation_collection_failures_total{reason="credentials"} 1'; do
   if ! grep --fixed-strings --quiet "${expected}" <<< "${metrics}"; then
     echo "missing from /metrics: ${expected}" >&2
@@ -69,3 +68,9 @@ for expected in \
     exit 1
   fi
 done
+
+if grep --extended-regexp --quiet '^openbao_rotation_key_(up|due_timestamp_seconds)[{ ]' <<< "${metrics}"; then
+  echo "unread keys must not export read status or a deadline" >&2
+  echo "${metrics}" >&2
+  exit 1
+fi

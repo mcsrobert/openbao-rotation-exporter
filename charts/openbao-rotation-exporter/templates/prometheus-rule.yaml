@@ -42,7 +42,11 @@ spec:
               openbao_rotation_key_failures_total has the reason.
         - alert: OpenBaoRotationCollectionStale
           expr: |-
-            time() - max by (job, namespace) (openbao_rotation_last_success_timestamp_seconds{ {{- $selector -}} })
+            time() - max by (job, namespace) (
+              (openbao_rotation_last_success_timestamp_seconds{ {{- $selector -}} } > 0)
+              or on (job, namespace, instance)
+              process_start_time_seconds{ {{- $selector -}} }
+            )
               > on (job, namespace)
             (
                 clamp_min(3 * max by (job, namespace) (openbao_rotation_collection_interval_seconds{ {{- $selector -}} }), 1800)
@@ -60,16 +64,4 @@ spec:
               No collection has succeeded for three collection intervals, and at least 30 minutes.
               Due times may be out of date. Check OpenBao, the exporter's login and the exporter
               logs.
-        - alert: OpenBaoRotationExporterDown
-          expr: absent(up{ {{- $selector -}} }) or up{ {{- $selector -}} } == 0
-          for: 15m
-          {{- with .Values.prometheusRule.alertLabels }}
-          labels:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          annotations:
-            summary: The OpenBao rotation exporter cannot be scraped
-            description: >-
-              Rotation alerts will not resolve or fire for new keys until the exporter is back.
-              Check the pod and the ServiceMonitor.
 {{- end }}
