@@ -93,7 +93,7 @@ contact OpenBao, so scrapes are cheap and cannot trigger logins.
 | Metric | Description |
 | --- | --- |
 | `openbao_rotation_key_due_timestamp_seconds{key}` | Current version's creation time plus the interval |
-| `openbao_rotation_key_up{key}` | Whether the latest read of the key succeeded |
+| `openbao_rotation_key_up{key}` | Whether the latest read succeeded; absent until a metadata read is attempted |
 | `openbao_rotation_key_failures_total{key,reason}` | Failed reads of the key |
 | `openbao_rotation_collection_success` | Whether the latest collection succeeded |
 | `openbao_rotation_last_success_timestamp_seconds` | Last successful collection, or 0 if none since start |
@@ -114,16 +114,19 @@ Key paths are metric labels, so anyone who can scrape the exporter can see them.
 
 ## Failure behavior
 
-Missing or stale data must not make an overdue secret look healthy.
+Deadlines are kept in memory while the exporter runs, including during failed
+collections. A restart clears that memory. Until metadata can be read again,
+due alerts may resolve even though the credentials have not been rotated.
+Collection-stale detection reports a prolonged inability to collect metadata.
 
 | Event | Exporter | Chart alert |
 | --- | --- | --- |
 | One key fails | Keeps its last known due time, `key_up` is 0 | `OpenBaoRotationDue` keeps firing, `OpenBaoRotationKeyFailing` fires |
 | Whole collection fails | Still returns 200 with the last snapshot, `collection_success` is 0 | `OpenBaoRotationCollectionStale` fires after the longer of 30 minutes and three intervals, the exporter is not reported as down |
-| Restart, then first collection fails | No due series, `key_up` is 0, last success is 0 | `OpenBaoRotationCollectionStale` and `OpenBaoRotationKeyFailing` fire |
-| Key removed from the config | Series goes away | None |
+| Restart, then login fails | No due or `key_up` series, last success is 0 | Due alerts may resolve; stale collection waits the full threshold from process start |
+| Key removed from the config | Series goes away | Due alert resolves |
 | Current version deleted or destroyed | Keeps its last known due time, `key_up` is 0 | `OpenBaoRotationKeyFailing` fires |
-| Exporter cannot be scraped | | `OpenBaoRotationExporterDown` fires |
+| Exporter cannot be scraped | | Use the monitoring stack's default target and workload alerts |
 
 A version with a future deletion time, from `delete_version_after`, still counts
 as live.

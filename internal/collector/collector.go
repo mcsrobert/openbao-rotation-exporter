@@ -40,6 +40,8 @@ type Options struct {
 // KeyStatus is the latest known state of one key.
 type KeyStatus struct {
 	Key string
+	// ReadAttempted distinguishes an unread key from a failed metadata read.
+	ReadAttempted bool
 	// Up reports whether the most recent read of this key succeeded.
 	Up bool
 	// Due is the last known due time, kept while reads fail. It is zero until
@@ -206,6 +208,7 @@ func (c *Collector) apply(next *Snapshot, results []readResult) bool {
 	anySucceeded := false
 	for i, result := range results {
 		status := &next.Keys[i]
+		status.ReadAttempted = true
 		if result.err != nil {
 			reason := openbao.ReasonOf(result.err)
 			status.Up = false

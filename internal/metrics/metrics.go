@@ -102,7 +102,9 @@ func (e *exporter) Collect(out chan<- prometheus.Metric) {
 	}
 
 	for _, status := range snapshot.Keys {
-		gauge(keyUpDesc, boolValue(status.Up), status.Key)
+		if status.ReadAttempted {
+			gauge(keyUpDesc, boolValue(status.Up), status.Key)
+		}
 		if !status.Due.IsZero() {
 			gauge(keyDueDesc, timestamp(status.Due), status.Key)
 		}

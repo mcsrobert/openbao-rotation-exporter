@@ -93,4 +93,20 @@ share a cluster. Alertmanager should use a long `repeat_interval` for
 | `OpenBaoRotationDue` | A key has passed its due time for 15 minutes |
 | `OpenBaoRotationKeyFailing` | A key's metadata could not be read for 15 minutes |
 | `OpenBaoRotationCollectionStale` | No collection has succeeded for three collection intervals, or 30 minutes if that is longer, plus 5 minutes |
-| `OpenBaoRotationExporterDown` | The exporter could not be scraped for 15 minutes |
+
+Use the monitoring stack's default target and workload alerts to detect an
+unavailable exporter. Inhibit collection-stale and key-failing notifications
+while an OpenBao-down alert fires.
+
+The due alert uses the exporter's in-memory deadlines. If it restarts while
+OpenBao is unavailable, due alerts may resolve until successful reads restore
+the deadlines. An overdue key then fires again after the 15-minute pending
+period. Stale collection timing starts at process start until the first
+successful collection. Removing a key removes its deadline from the exporter.
+
+To use a token limited to OpenBao, set `serviceAccount.automount: false`.
+Mount a projected `serviceAccountToken` using `extraVolumes` and
+`extraVolumeMounts`. Set `config.openbao.auth.kubernetes.jwtFile` to the token
+path. Set the same audience (for example `openbao`) on the projection and the
+OpenBao Kubernetes role. Kubernetes rotates the projected token; the exporter
+rereads it on login.
