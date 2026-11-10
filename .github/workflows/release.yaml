@@ -21,7 +21,7 @@ jobs:
 
   publish:
     needs: ["ci"]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       attestations: write
       contents: read
@@ -156,7 +156,7 @@ jobs:
 
   verify-chart:
     needs: ["publish"]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       attestations: read
       contents: read
@@ -199,7 +199,7 @@ jobs:
 
   release:
     needs: ["publish", "verify", "verify-chart"]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
