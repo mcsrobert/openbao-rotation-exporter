@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/mcsrobert/openbao-rotation-exporter/compare/v0.2.0...v0.2.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **alerts:** avoid false failures during exporter startup ([d225eb9](https://github.com/mcsrobert/openbao-rotation-exporter/commit/d225eb9d6ca7055bbfc4a62ffa4989369e0ec44b))
+
 ## [0.2.0](https://github.com/mcsrobert/openbao-rotation-exporter/compare/v0.1.0...v0.2.0) (2026-11-09)
 
 
